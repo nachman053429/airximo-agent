@@ -10,7 +10,7 @@ app = Flask(__name__)
 GREEN_API_URL = "https://7107.api.greenapi.com"
 INSTANCE_ID = "7107569796"
 INSTANCE_TOKEN = "c5364f36516647d0b7a48a6652d3278e73916bc9020e40298d"
-GROUP_ID = "120363419011614415@g.us"
+GROUP_ID = "120363409953665712@g.us"
 
 # ═══════════════════════════════════════
 # פונקציה לשליחת הודעה לוואטסאפ
