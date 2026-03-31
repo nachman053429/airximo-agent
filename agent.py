@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 import requests
 import json
 import os
+import re
 from datetime import datetime
 
 app = Flask(__name__)
@@ -20,24 +21,58 @@ def send_whatsapp(message):
     response = requests.post(url, json=payload)
     return response.json()
 
-def format_job(data):
-    customer_name = data.get("customer", {}).get("name", "")
-    phone = data.get("customer", {}).get("number", "")
+def extract_info(transcript, summary, customer_phone):
+    name = ""
+    phone = customer_phone or ""
+    address = ""
+    service = ""
+    date = ""
+    time_slot = ""
+
+    if summary:
+        name_match = re.search(r'for ([A-Z][a-z]+ [A-Z][a-z]+)', summary)
+        if name_match:
+            name = name_match.group(1)
+
+        address_match = re.search(r'at ([\d]+ .+?(?:Drive|Street|Ave|Blvd|Road|Dr|St|Ln|Lane|Way|Ct|Court)[,\s]+\w+[\w\s]+\d{5})', summary, re.IGNORECASE)
+        if address_match:
+            address = address_match.group(1)
+
+        date_match = re.search(r'((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),? ?(?:January|February|March|April|May|June|July|August|September|October|November|December) \d+(?:st|nd|rd|th)?)', summary)
+        if date_match:
+            date = date_match.group(1)
+
+        time_match = re.search(r'between (\d+(?::\d+)? ?(?:AM|PM) and \d+(?::\d+)? ?(?:AM|PM))', summary)
+        if time_match:
+            time_slot = time_match.group(1)
+
+    if transcript:
+        service_keywords = [
+            ("dryer vent", "Dryer Vent Cleaning"),
+            ("air duct", "Air Duct Cleaning"),
+            ("chimney", "Chimney Sweep"),
+            ("inspection", "Free Inspection")
+        ]
+        for kw, label in service_keywords:
+            if kw.lower() in transcript.lower():
+                service = label
+                break
+
     now = datetime.now()
     date_str = now.strftime("%d/%m/%Y")
 
     message = f"""Duct Purify - 00276
 
-Customer: {customer_name}
+Customer: {name}
 Phone: {phone}
-Address: 
-Service: 
+Address: {address}
+Service: {service}
 Price: $0
 Parts: $0
 Tip: $0
 Payment: 
-Date: {date_str}
-Time: 
+Date: {date if date else date_str}
+Time: {time_slot}
 Notes:"""
 
     return message
@@ -47,12 +82,16 @@ def webhook():
     try:
         data = request.json
         print(f"Received: {json.dumps(data, indent=2)}")
-        
+
         if data.get("message", {}).get("type") == "end-of-call-report":
-            message = format_job(data.get("message", {}))
+            msg = data.get("message", {})
+            transcript = msg.get("transcript", "")
+            summary = msg.get("analysis", {}).get("summary", "")
+            customer_phone = msg.get("customer", {}).get("number", "")
+            message = extract_info(transcript, summary, customer_phone)
             result = send_whatsapp(message)
             print(f"WhatsApp sent: {result}")
-            
+
         return jsonify({"status": "ok"}), 200
     except Exception as e:
         print(f"Error: {e}")
